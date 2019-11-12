@@ -1,0 +1,13 @@
+name: "automerger-action"
+description: "A PR merge helper"
+author: "Sportsbet"
+inputs:
+  appId:
+    description: "GitHub Application ID to use for generating commits"
+  appKey:
+    description: "GitHub Application private key to use for generating JWTs"
+  githubToken:
+    description: "Set this to secrets.GITHUB_TOKEN"
+runs:
+  using: "node12"
+  main: "lib/main.js"

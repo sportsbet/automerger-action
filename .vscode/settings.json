@@ -1,0 +1,10 @@
+{
+	"typescript.tsdk": "./node_modules/typescript/lib",
+	"search.exclude": {
+		"build": true
+	},
+	"editor.formatOnSave": true,
+	"editor.insertSpaces": false,
+	"editor.detectIndentation": false,
+	"git.ignoreLimitWarning": true
+}

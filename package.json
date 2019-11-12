@@ -1,0 +1,45 @@
+{
+	"name": "automerger-action",
+	"version": "0.0.0",
+	"private": true,
+	"description": "An automerger GitHub action for Sportsbet's merge rules",
+	"main": "lib/main.js",
+	"scripts": {
+		"build": "tsc",
+		"test": "jest"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Sportsbet-Internal/automerger-action.git"
+	},
+	"keywords": [
+		"actions",
+		"node",
+		"setup"
+	],
+	"author": "Sportsbet",
+	"license": "MIT",
+	"dependencies": {
+		"@actions/core": "^1.2.0",
+		"@actions/exec": "^1.0.1",
+		"@actions/github": "^1.1.0",
+		"@octokit/webhooks": "^6.3.2",
+		"fs-extra": "^8.1.0",
+		"jsonwebtoken": "^8.5.1",
+		"tmp": "^0.1.0"
+	},
+	"devDependencies": {
+		"@types/fs-extra": "^8.0.1",
+		"@types/jest": "^24.0.13",
+		"@types/jsonwebtoken": "^8.3.5",
+		"@types/node": "^12.0.4",
+		"@types/sinon": "^7.5.0",
+		"@types/tmp": "^0.1.0",
+		"jest": "^24.8.0",
+		"jest-circus": "^24.7.1",
+		"sinon": "^7.5.0",
+		"ts-jest": "^24.0.2",
+		"ts-node": "^8.4.1",
+		"typescript": "^3.7.2"
+	}
+}
