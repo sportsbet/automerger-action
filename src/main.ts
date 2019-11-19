@@ -161,10 +161,14 @@ async function checkMergeability(octokit: Octokit, pr: PullRequestCommon, retrie
 	const pull = await octokit.pulls.get({
 		owner: pr.base.repo.owner.login,
 		repo: pr.base.repo.name,
-		number: pr.number
+		pull_number: pr.number
 	})
-	if (pull.data.mergeable === null) {
+	if (pull.data.mergeable === null || pull.data.mergeable_state !== "clean") {
 		if (retries > 0) {
+			logger.info(
+				`Retrying mergeability check because mergeable = '${pull.data.mergeable}'` +
+					`and state = '${pull.data.mergeable_state}'. retries: (${run}/${retries})`
+			)
 			await delay(2000)
 			return checkMergeability(octokit, pr, retries - 1)
 		} else {
