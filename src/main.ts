@@ -33,7 +33,7 @@ function log(prefix: string | Nullary, obj: any) {
 }
 
 export const logger = {
-	level: "info",
+	level: "trace",
 
 	trace: (...str: any[]) => {
 		if (logger.level === "trace") {
