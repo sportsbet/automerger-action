@@ -124,6 +124,19 @@ interface PullRequestCommon {
 	}[]
 }
 
+interface Context {
+	octokit: Octokit
+	appId: string
+	appKey: string
+	repoSlug: string
+	repoDir: string
+}
+
+interface AuthenticatedContext extends Context {
+	authenticatedOctokit: Octokit
+	accessToken: Octokit.AppsCreateInstallationTokenResponse
+}
+
 interface PullRequestExtended extends PullRequestCommon {
 	mergeable: boolean | null
 	mergeable_state: "behind" | "blocked" | "clean" | "dirty" | "draft" | "has_hooks" | "unknown" | "unstable" | string
@@ -157,8 +170,12 @@ async function retry(
 	return false
 }
 
-async function checkMergeability(octokit: Octokit, pr: PullRequestCommon, retries = 3): Promise<PullRequestExtended> {
-	const pull = await octokit.pulls.get({
+async function checkMergeability(
+	context: AuthenticatedContext,
+	pr: PullRequestCommon,
+	retries = 3
+): Promise<PullRequestExtended> {
+	const pull = await context.authenticatedOctokit.pulls.get({
 		owner: pr.base.repo.owner.login,
 		repo: pr.base.repo.name,
 		pull_number: pr.number
@@ -170,7 +187,7 @@ async function checkMergeability(octokit: Octokit, pr: PullRequestCommon, retrie
 					`and state = '${pull.data.mergeable_state}'. retries: (${run}/${retries})`
 			)
 			await delay(2000)
-			return checkMergeability(octokit, pr, retries - 1)
+			return checkMergeability(context, pr, retries - 1)
 		} else {
 			return pull.data
 		}
@@ -182,16 +199,29 @@ async function checkMergeability(octokit: Octokit, pr: PullRequestCommon, retrie
 async function run() {
 	try {
 		const actionsToken = core.getInput("githubToken", { required: true })
+		const appId = core.getInput("appId", { required: true })
+		const appKey = core.getInput("appKey", { required: true })
 		core.setSecret(actionsToken)
+		core.setSecret(appKey)
 
 		const eventPath = env("GITHUB_EVENT_PATH")
 		const eventName = env("GITHUB_EVENT_NAME")
+		const repoSlug = env("GITHUB_REPOSITORY")
+		const repoDir = env("GITHUB_WORKSPACE")
 
 		const eventDataStr = await fs.readFile(eventPath, { encoding: "utf8" })
 		const eventData = JSON.parse(eventDataStr)
 
 		const octokit = new github.GitHub(actionsToken)
-		await runGitHubAction(octokit, eventData, eventName)
+
+		const context: Context = {
+			octokit,
+			appId,
+			appKey,
+			repoSlug,
+			repoDir
+		}
+		await runGitHubAction(context, eventData, eventName)
 	} catch (error) {
 		if (error instanceof NoError) {
 			process.exit(0)
@@ -202,10 +232,10 @@ async function run() {
 	}
 }
 
-function makeGeneralHandler(octokit: Octokit, handler: (octokit: Octokit, payload: any) => Promise<void>) {
+function makeGeneralHandler(context: Context, handler: (context: Context, payload: any) => Promise<void>) {
 	return async ({ payload }) => {
 		try {
-			await handler(octokit, payload)
+			await handler(context, payload)
 		} catch (error) {
 			if (error instanceof NoError) {
 				process.exit(0)
@@ -218,7 +248,7 @@ function makeGeneralHandler(octokit: Octokit, handler: (octokit: Octokit, payloa
 
 const VALID_EVENTS = ["push", "status", "pull_request", "pull_request_review"]
 
-async function runGitHubAction(octokit: Octokit, eventData: any, eventName: string) {
+async function runGitHubAction(context: Context, eventData: any, eventName: string) {
 	logger.info("Event name:", eventName)
 	logger.trace("Event data:", eventData)
 
@@ -226,10 +256,10 @@ async function runGitHubAction(octokit: Octokit, eventData: any, eventName: stri
 		secret: "no"
 	})
 
-	webhooks.on("pull_request", makeGeneralHandler(octokit, onPR))
-	webhooks.on("pull_request_review", makeGeneralHandler(octokit, onPRReview))
-	webhooks.on("status", makeGeneralHandler(octokit, onStatus))
-	webhooks.on("push", makeGeneralHandler(octokit, onPush))
+	webhooks.on("pull_request", makeGeneralHandler(context, onPR))
+	webhooks.on("pull_request_review", makeGeneralHandler(context, onPRReview))
+	webhooks.on("status", makeGeneralHandler(context, onStatus))
+	webhooks.on("push", makeGeneralHandler(context, onPush))
 
 	if (VALID_EVENTS.includes(eventName)) {
 		await webhooks.verifyAndReceive({
@@ -255,20 +285,22 @@ const RELEVANT_PR_ACTIONS = [
 	"unlocked"
 ]
 
-async function onPR(octokit: Octokit, payload: WebhooksAPI.WebhookPayloadPullRequest) {
+async function onPR(context: Context, payload: WebhooksAPI.WebhookPayloadPullRequest) {
 	if (!RELEVANT_PR_ACTIONS.includes(payload.action)) {
 		logger.info(`PR action ignored ${payload.action}`)
 		throw new NoError()
 	}
-	const realPR = await checkMergeability(octokit, payload.pull_request)
-	return processPR(octokit, realPR)
+	const authenticatedContext = await authenticate(context)
+	const realPR = await checkMergeability(authenticatedContext, payload.pull_request)
+	return processPR(authenticatedContext, realPR)
 }
 
-async function onPRReview(octokit: Octokit, payload: WebhooksAPI.WebhookPayloadPullRequestReview) {
+async function onPRReview(context: Context, payload: WebhooksAPI.WebhookPayloadPullRequestReview) {
 	if (payload.action === "submitted") {
 		if (payload.review.state === "approved") {
-			const realPR = await checkMergeability(octokit, payload.pull_request)
-			return processPR(octokit, realPR)
+			const authenticatedContext = await authenticate(context)
+			const realPR = await checkMergeability(authenticatedContext, payload.pull_request)
+			return processPR(authenticatedContext, realPR)
 		} else {
 			logger.info(`Review state is not approved: ${payload.review.state}`)
 			throw new NoError()
@@ -279,9 +311,9 @@ async function onPRReview(octokit: Octokit, payload: WebhooksAPI.WebhookPayloadP
 	}
 }
 
-async function onStatus(octokit: Octokit, payload: WebhooksAPI.WebhookPayloadStatus): Promise<void> {}
+async function onStatus(context: Context, payload: WebhooksAPI.WebhookPayloadStatus): Promise<void> {}
 
-async function onPush(octokit: Octokit, payload: WebhooksAPI.WebhookPayloadPush): Promise<void> {
+async function onPush(context: Context, payload: WebhooksAPI.WebhookPayloadPush): Promise<void> {
 	if (!payload.ref.startsWith("refs/heads/")) {
 		logger.info(`Push '${payload.ref}' does not reference a branch`)
 		throw new NoError()
@@ -294,7 +326,7 @@ async function onPush(octokit: Octokit, payload: WebhooksAPI.WebhookPayloadPush)
 		throw new NoError()
 	}
 
-	const { data: pullRequests } = await octokit.pulls.list({
+	const { data: pullRequests } = await context.octokit.pulls.list({
 		owner: payload.repository.owner.name,
 		repo: payload.repository.name,
 		state: "open",
@@ -314,10 +346,11 @@ async function onPush(octokit: Octokit, payload: WebhooksAPI.WebhookPayloadPush)
 	}
 
 	let updated = 0
+	const authenticatedContext = await authenticate(context)
 	for (const pullRequest of pullRequests) {
 		try {
-			const realPR = await checkMergeability(octokit, pullRequest)
-			await processPR(octokit, realPR)
+			const realPR = await checkMergeability(authenticatedContext, pullRequest)
+			await processPR(authenticatedContext, realPR)
 			updated++
 		} catch (error) {
 			if (error instanceof NoError) {
@@ -342,7 +375,7 @@ function isMergingIntoRelease(pr: PullRequestCommon): boolean {
 	return false
 }
 
-async function processPR(octokit: Octokit, pr: PullRequestExtended): Promise<void> {
+async function processPR(context: AuthenticatedContext, pr: PullRequestExtended): Promise<void> {
 	if (pr.mergeable_state !== "clean") {
 		logger.info(`PR #${pr.number} mergeability blocked: ${pr.mergeable_state}`)
 		throw new NoError()
@@ -356,11 +389,11 @@ async function processPR(octokit: Octokit, pr: PullRequestExtended): Promise<voi
 		throw new NoError()
 	}
 
-	return automerge(octokit, pr)
+	return automerge(context, pr)
 }
 
-async function addCommentToPR(octokit: Octokit, pr: PullRequestCommon, comment: string): Promise<void> {
-	await octokit.issues.createComment({
+async function addCommentToPR(context: Context, pr: PullRequestCommon, comment: string): Promise<void> {
+	await context.octokit.issues.createComment({
 		issue_number: pr.number,
 		owner: pr.base.repo.owner.login,
 		repo: pr.base.repo.name,
@@ -368,14 +401,11 @@ async function addCommentToPR(octokit: Octokit, pr: PullRequestCommon, comment: 
 	})
 }
 
-// Sets git remote to use the credentials for the Sportsbot github app
-// This allows us to give it write permission to master
-async function setGitRemoteToAppPermission(): Promise<void> {
-	const appId = core.getInput("appId", { required: true })
-	const appKey = core.getInput("appKey", { required: true })
-	core.setSecret(appKey)
-	const repoSlug = env("GITHUB_REPOSITORY")
-	const repoDir = env("GITHUB_WORKSPACE")
+async function createGitHubAppAccessToken(
+	appId: string,
+	appKey: string,
+	repoSlug: string
+): Promise<Octokit.AppsCreateInstallationTokenResponse> {
 	const jwt = generateJwt(appKey, appId)
 	const jwtOctokit = new Octokit({
 		auth: `Bearer ${jwt}`
@@ -383,20 +413,41 @@ async function setGitRemoteToAppPermission(): Promise<void> {
 	const installation = await getInstallationFromGitHub(jwtOctokit, repoSlug)
 	const accessToken = await newAccessTokenFromGitHub(jwtOctokit, installation.id)
 	core.setSecret(accessToken.token)
-	const remoteURL = gitRemote(accessToken.token, repoSlug)
-	await git.setRemote(repoDir, "origin", remoteURL)
+	return accessToken
+}
+
+/**
+ * Returns a new `Octokit` authenticated against the GitHub app
+ */
+async function authenticate(context: Context): Promise<AuthenticatedContext> {
+	const accessToken = await createGitHubAppAccessToken(context.appId, context.appKey, context.repoSlug)
+	const authenticatedOctokit = new Octokit({
+		auth: `token ${accessToken.token}`
+	})
+	return {
+		accessToken,
+		authenticatedOctokit,
+		...context
+	}
+}
+
+// Sets git remote to use the credentials for the Sportsbot github app
+// This allows us to give it write permission to master
+async function setGitRemoteToAppPermission(context: AuthenticatedContext): Promise<void> {
+	const remoteURL = gitRemote(context.accessToken.token, context.repoSlug)
+	await git.setRemote(context.repoDir, "origin", remoteURL)
 }
 
 type MergeMethod = "merge" | "squash" | "rebase"
 async function tryMerge(
-	octokit: Octokit,
+	context: AuthenticatedContext,
 	pr: PullRequestExtended,
 	mergeMethod: MergeMethod,
 	commitMessage: string | undefined
 ) {
 	async function mergePR() {
 		try {
-			const res = await octokit.pulls.merge({
+			const res = await context.authenticatedOctokit.pulls.merge({
 				owner: pr.head.repo.owner.login,
 				repo: pr.head.repo.name,
 				pull_number: pr.number,
@@ -421,16 +472,16 @@ async function tryMerge(
 // PRs to releases/* and to release-* need to be automatically merged
 // back to master, or have the PR marked as not ready if there's some kind
 // of conflict to master.
-async function checkRollupToMaster(octokit: Octokit, pr: PullRequestExtended): Promise<boolean> {
+async function checkRollupToMaster(context: AuthenticatedContext, pr: PullRequestExtended): Promise<boolean> {
 	const repoDir = env("GITHUB_WORKSPACE")
-	const context = "Sportsbot: release to master automerge"
+	const statusContext = "Sportsbot: release to master automerge"
 	let mergeMsg = await git.canMergeCleanly(repoDir, "master", pr.head.ref)
-	const existingStatuses = await octokit.repos.listStatusesForRef({
+	const existingStatuses = await context.octokit.repos.listStatusesForRef({
 		ref: pr.head.sha,
 		owner: pr.base.repo.owner.login,
 		repo: pr.base.repo.name
 	})
-	const myStatuses = existingStatuses.data.filter(s => s.context === context)
+	const myStatuses = existingStatuses.data.filter(s => s.context === statusContext)
 	let needsComment = true
 	if (myStatuses.length > 1) {
 		if (myStatuses[0].state === "failure" || myStatuses[0].state === "error") {
@@ -440,15 +491,15 @@ async function checkRollupToMaster(octokit: Octokit, pr: PullRequestExtended): P
 	if (mergeMsg !== null) {
 		const desc = "Cannot merge into `master`. Git output:\n\n```" + mergeMsg + "```"
 		if (needsComment) {
-			await addCommentToPR(octokit, pr, desc)
+			await addCommentToPR(context, pr, desc)
 		}
-		await octokit.repos.createStatus({
+		await context.octokit.repos.createStatus({
 			sha: pr.head.sha,
 			owner: pr.base.repo.owner.login,
 			repo: pr.base.repo.name,
 			state: "failure",
 			description: desc,
-			context
+			context: statusContext
 		})
 		return false
 	}
@@ -457,7 +508,7 @@ async function checkRollupToMaster(octokit: Octokit, pr: PullRequestExtended): P
 
 // PRs to master should be automatically merged using the correct merge method
 // when they are ready, if they are labelled as needing an automerge.
-async function automerge(octokit: Octokit, pr: PullRequestExtended): Promise<void> {
+async function automerge(context: AuthenticatedContext, pr: PullRequestExtended): Promise<void> {
 	let mergeMethod: MergeMethod = "merge"
 	let title: string | undefined = undefined
 	if (pr.base.ref === "master") {
@@ -466,14 +517,14 @@ async function automerge(octokit: Octokit, pr: PullRequestExtended): Promise<voi
 	}
 
 	if (isMergingIntoRelease(pr)) {
-		await setGitRemoteToAppPermission()
-		const canMerge = await checkRollupToMaster(octokit, pr)
+		await setGitRemoteToAppPermission(context)
+		const canMerge = await checkRollupToMaster(context, pr)
 		if (!canMerge) {
 			// abort
 			return
 		}
 		// Merge into release first...
-		if (!tryMerge(octokit, pr, mergeMethod, title)) {
+		if (!tryMerge(context, pr, mergeMethod, title)) {
 			throw "Merge failed"
 		}
 		// Merge and push to master
@@ -486,7 +537,7 @@ async function automerge(octokit: Octokit, pr: PullRequestExtended): Promise<voi
 		return
 	}
 	// Is a feature branch into master -- merge
-	if (!tryMerge(octokit, pr, mergeMethod, title)) {
+	if (!tryMerge(context, pr, mergeMethod, title)) {
 		throw "Merge failed"
 	}
 }
