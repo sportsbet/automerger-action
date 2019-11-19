@@ -208,6 +208,8 @@ async function run() {
 		const eventName = env("GITHUB_EVENT_NAME")
 		const repoSlug = env("GITHUB_REPOSITORY")
 		const repoDir = env("GITHUB_WORKSPACE")
+		const loglevel = process.env["LOG_LEVEL"] || "info"
+		logger.level = loglevel
 
 		const eventDataStr = await fs.readFile(eventPath, { encoding: "utf8" })
 		const eventData = JSON.parse(eventDataStr)
