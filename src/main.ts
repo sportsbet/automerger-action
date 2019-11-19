@@ -87,7 +87,7 @@ function tmpdir<T>(callback: (path: string) => Promise<T>): Promise<T> {
 	})
 }
 
-function env(name: string) {
+function env(name: string): string {
 	const val = process.env[name]
 	if (!val || !val.length) {
 		throw new ClientError(`environment variable ${name} not set!`)
@@ -187,7 +187,7 @@ async function run() {
 		const eventData = JSON.parse(eventDataStr)
 
 		const octokit = new github.GitHub(actionsToken)
-		await runGitHubAction(octokit, eventName, eventData)
+		await runGitHubAction(octokit, eventData, eventName)
 	} catch (error) {
 		if (error instanceof NoError) {
 			process.exit(0)
