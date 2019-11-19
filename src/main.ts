@@ -198,6 +198,20 @@ async function run() {
 	}
 }
 
+function makeGeneralHandler(octokit: Octokit, handler: (octokit: Octokit, payload: any) => Promise<void>) {
+	return async ({ payload }) => {
+		try {
+			await handler(octokit, payload)
+		} catch (error) {
+			if (error instanceof NoError) {
+				process.exit(0)
+			} else {
+				process.exit(1)
+			}
+		}
+	}
+}
+
 const VALID_EVENTS = ["push", "status", "pull_request", "pull_request_review"]
 
 async function runGitHubAction(octokit: Octokit, eventData: any, eventName: string) {
@@ -208,18 +222,10 @@ async function runGitHubAction(octokit: Octokit, eventData: any, eventName: stri
 		secret: "no"
 	})
 
-	webhooks.on("pull_request", async ({ payload }) => {
-		await onPR(octokit, payload)
-	})
-	webhooks.on("pull_request_review", async ({ payload }) => {
-		await onPRReview(octokit, payload)
-	})
-	webhooks.on("status", async ({ payload }) => {
-		await onStatus(octokit, payload)
-	})
-	webhooks.on("push", async ({ payload }) => {
-		await onPush(octokit, payload)
-	})
+	webhooks.on("pull_request", makeGeneralHandler(octokit, onPR))
+	webhooks.on("pull_request_review", makeGeneralHandler(octokit, onPRReview))
+	webhooks.on("status", makeGeneralHandler(octokit, onStatus))
+	webhooks.on("push", makeGeneralHandler(octokit, onPush))
 
 	if (VALID_EVENTS.includes(eventName)) {
 		await webhooks.verifyAndReceive({
