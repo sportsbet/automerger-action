@@ -461,6 +461,7 @@ async function tryMerge(
 				merge_method: mergeMethod
 			})
 			if (res.status === 200) {
+				logger.info(`PR #${pr.number} merged (${mergeMethod})`)
 				return true
 			} else {
 				logger.info("Failed to merge PR:", res.status)
@@ -471,7 +472,8 @@ async function tryMerge(
 			return false
 		}
 	}
-	return retry(3, 10000, mergePR, mergePR, () => Promise.resolve(false))
+	const res = await retry(3, 10000, mergePR, mergePR, () => Promise.resolve(false))
+	return res
 }
 
 // PRs to releases/* and to release-* need to be automatically merged
@@ -545,6 +547,7 @@ async function automerge(context: AuthenticatedContext, pr: PullRequestExtended)
 	// Is a feature branch into master -- merge
 	logger.info(`Merging (${mergeMethod}) ${pr.head.ref} -> ${pr.base.ref}`)
 	if (!tryMerge(context, pr, mergeMethod, title)) {
+		logger.info(`Merging (${mergeMethod}) ${pr.head.ref} -> ${pr.base.ref} FAILED`)
 		throw "Merge failed"
 	}
 }
