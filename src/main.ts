@@ -532,7 +532,8 @@ async function automerge(context: AuthenticatedContext, pr: PullRequestExtended)
 			return
 		}
 		// Merge into release first...
-		if (!tryMerge(context, pr, mergeMethod, title)) {
+		const mergeOK = await tryMerge(context, pr, mergeMethod, title)
+		if (!mergeOK) {
 			throw "Merge failed"
 		}
 		// Merge and push to master
