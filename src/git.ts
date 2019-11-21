@@ -15,7 +15,7 @@ const FETCH_DEPTH = 10
 
 const COMMON_ARGS = ["-c", "user.name=GitHub", "-c", "user.email=noreply@github.com"]
 
-export function git(cwd: string, ...args: (string | null)[]): Promise<string> {
+function rawGit(cwd: string, args: string[]): Promise<string> {
 	const stdio: ("ignore" | "pipe" | "inherit")[] = [
 		"ignore",
 		"pipe",
@@ -25,7 +25,7 @@ export function git(cwd: string, ...args: (string | null)[]): Promise<string> {
 	const command = args.includes("clone") ? "git clone" : `git ${args.join(" ")}`
 	logger.debug("Executing", command)
 	return new Promise((resolve, reject) => {
-		const proc = spawn("git", COMMON_ARGS.concat(args.filter(a => a !== null) as string[]), { cwd, stdio })
+		const proc = spawn("git", args, { cwd, stdio })
 		const buffers: Uint8Array[] = []
 		if (proc.stdout) {
 			proc.stdout.on("data", data => buffers.push(data))
@@ -43,6 +43,10 @@ export function git(cwd: string, ...args: (string | null)[]): Promise<string> {
 			}
 		})
 	})
+}
+
+export function git(cwd: string, ...args: (string | null)[]): Promise<string> {
+	return rawGit(cwd, COMMON_ARGS.concat(args.filter(a => a !== null) as string[]))
 }
 
 export async function shallowClone(from: string, to: string, branch: string) {
@@ -128,6 +132,10 @@ export async function mergeBase(dir: string, ...refs: string[]) {
 			throw e
 		}
 	}
+}
+
+export async function removeGitHubConfigs(dir: string): Promise<string> {
+	return await rawGit(dir, ["config", "--remove-section", "http.https://github.com/"])
 }
 
 /**

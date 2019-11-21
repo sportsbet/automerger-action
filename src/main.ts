@@ -441,6 +441,7 @@ async function authenticate(context: Context): Promise<AuthenticatedContext> {
 async function setGitRemoteToAppPermission(context: AuthenticatedContext): Promise<void> {
 	const remoteURL = gitRemote(context.accessToken.token, context.repoSlug)
 	await git.setRemote(context.repoDir, "origin", remoteURL)
+	await git.removeGitHubConfigs(context.repoDir)
 }
 
 type MergeMethod = "merge" | "squash" | "rebase"
@@ -497,7 +498,7 @@ async function checkRollupToMaster(context: AuthenticatedContext, pr: PullReques
 	}
 	if (mergeMsg !== null) {
 		const desc =
-			"This is a PR into a `release` branch. All work merged directly into a `release`" +
+			"This is a PR into a `release` branch. All work merged directly into a `release` " +
 			"branch MUST also make its way back into `master`. I tried to merge into `master` for you, " +
 			"but it appears it cannot be merged cleanly. Git output:\n\n```" +
 			mergeMsg +
