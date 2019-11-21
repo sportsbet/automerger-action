@@ -546,7 +546,8 @@ async function automerge(context: AuthenticatedContext, pr: PullRequestExtended)
 	}
 	// Is a feature branch into master -- merge
 	logger.info(`Merging (${mergeMethod}) ${pr.head.ref} -> ${pr.base.ref}`)
-	if (!tryMerge(context, pr, mergeMethod, title)) {
+	const mergeOK = await tryMerge(context, pr, mergeMethod, title)
+	if (!mergeOK) {
 		logger.info(`Merging (${mergeMethod}) ${pr.head.ref} -> ${pr.base.ref} FAILED`)
 		throw "Merge failed"
 	}
