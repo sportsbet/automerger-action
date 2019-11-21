@@ -294,7 +294,8 @@ async function onPR(context: Context, payload: WebhooksAPI.WebhookPayloadPullReq
 	}
 	const authenticatedContext = await authenticate(context)
 	const realPR = await checkMergeability(authenticatedContext, payload.pull_request)
-	return processPR(authenticatedContext, realPR)
+	await processPR(authenticatedContext, realPR)
+	return
 }
 
 async function onPRReview(context: Context, payload: WebhooksAPI.WebhookPayloadPullRequestReview) {
@@ -302,7 +303,8 @@ async function onPRReview(context: Context, payload: WebhooksAPI.WebhookPayloadP
 		if (payload.review.state === "approved") {
 			const authenticatedContext = await authenticate(context)
 			const realPR = await checkMergeability(authenticatedContext, payload.pull_request)
-			return processPR(authenticatedContext, realPR)
+			await processPR(authenticatedContext, realPR)
+			return
 		} else {
 			logger.info(`Review state is not approved: ${payload.review.state}`)
 			throw new NoError()
@@ -414,7 +416,7 @@ async function processPR(context: AuthenticatedContext, pr: PullRequestExtended)
 		throw new NoError()
 	}
 
-	return automerge(context, pr)
+	await automerge(context, pr)
 }
 
 async function addCommentToPR(context: Context, pr: PullRequestCommon, comment: string): Promise<void> {
@@ -469,12 +471,12 @@ async function tryMerge(
 	pr: PullRequestExtended,
 	mergeMethod: MergeMethod,
 	commitMessage: string | undefined
-) {
+): Promise<boolean> {
 	async function mergePR() {
 		try {
 			const res = await context.authenticatedOctokit.pulls.merge({
-				owner: pr.head.repo.owner.login,
-				repo: pr.head.repo.name,
+				owner: pr.base.repo.owner.login,
+				repo: pr.base.repo.name,
 				pull_number: pr.number,
 				commit_message: commitMessage,
 				sha: pr.head.sha,
@@ -542,6 +544,7 @@ async function automerge(context: AuthenticatedContext, pr: PullRequestExtended)
 	}
 
 	if (isMergingIntoRelease(pr)) {
+		logger.info(`Merging (${mergeMethod}) ${pr.head.ref} -> ${pr.base.ref} -> master`)
 		await setGitRemoteToAppPermission(context)
 		const canMerge = await checkRollupToMaster(context, pr)
 		if (!canMerge) {
@@ -562,6 +565,7 @@ async function automerge(context: AuthenticatedContext, pr: PullRequestExtended)
 		return
 	}
 	// Is a feature branch into master -- merge
+	logger.info(`Merging (${mergeMethod}) ${pr.head.ref} -> ${pr.base.ref}`)
 	if (!tryMerge(context, pr, mergeMethod, title)) {
 		throw "Merge failed"
 	}
