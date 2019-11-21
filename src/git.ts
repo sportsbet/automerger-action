@@ -188,7 +188,7 @@ export async function merge(
 
 export async function abortMerge(dir: string): Promise<void> {
 	try {
-		await git(dir, "merge", "--quiet", "--abort")
+		await git(dir, "merge", "--abort")
 	} catch (err) {
 		if (err instanceof ExitError) {
 			if (err.code === 128) {
