@@ -143,7 +143,7 @@ export async function canMergeCleanly(dir: string, base: string, mergingBranch: 
 	await git(dir, "pull", "--quiet", "--no-commit")
 	await git(dir, "fetch", "--quiet", "origin", `${mergingBranch}:refs/remotes/origin/${mergingBranch}`)
 	try {
-		await git(dir, "merge", "--quiet", "--no-commit", mergingBranch)
+		await git(dir, "merge", "--quiet", "--no-commit", `refs/remotes/origin/${mergingBranch}`)
 		await abortMerge(dir)
 	} catch (err) {
 		await abortMerge(dir)
@@ -170,11 +170,14 @@ export async function merge(
 	mergingBranch: string,
 	message?: string
 ): Promise<string | null> {
+	await git(dir, "checkout", base)
+	await git(dir, "pull", "--quiet", "--no-commit")
+	await git(dir, "fetch", "--quiet", "origin", `${mergingBranch}:refs/remotes/origin/${mergingBranch}`)
 	try {
 		if (message) {
-			await git(dir, "merge", "--quiet", "--no-edit", "-m", message, mergingBranch)
+			await git(dir, "merge", "--quiet", "--no-edit", "-m", message, `refs/remotes/origin/${mergingBranch}`)
 		} else {
-			await git(dir, "merge", "--quiet", "--no-edit", mergingBranch)
+			await git(dir, "merge", "--quiet", "--no-edit", `refs/remotes/origin/${mergingBranch}`)
 		}
 	} catch (err) {
 		await abortMerge(dir)
