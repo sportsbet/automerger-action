@@ -379,33 +379,11 @@ function isMergingIntoRelease(pr: PullRequestCommon): boolean {
 	return false
 }
 
-async function checkStatuses(context: AuthenticatedContext, pr: PullRequestExtended): Promise<boolean> {
-	// Check the pending statuses.
-	// If the only pending status is this check, then it's OK
-	const statuses = await context.authenticatedOctokit.repos.listStatusesForRef({
-		owner: pr.base.repo.owner.login,
-		repo: pr.base.repo.name,
-		ref: pr.head.ref
-	})
-	logger.trace(`Statuses for ref #${pr.head.ref}`, statuses.data)
-	const pendingStatuses = statuses.data.filter(status => status.state === "pending")
-	if (pendingStatuses.length === 0) {
-		return true
-	}
-	return false
-}
-
 async function processPR(context: AuthenticatedContext, pr: PullRequestExtended): Promise<void> {
 	logger.trace(`Processing PR #${pr.number}:`, pr)
-	if (pr.mergeable_state !== "clean") {
-		if (pr.mergeable_state === "unstable") {
-			await checkStatuses(context, pr)
-			logger.info(`PR #${pr.number} mergeability blocked: ${pr.mergeable_state}`)
-			throw new NoError()
-		} else {
-			logger.info(`PR #${pr.number} mergeability blocked: ${pr.mergeable_state}`)
-			throw new NoError()
-		}
+	if (pr.mergeable_state !== "clean" && pr.mergeable_state !== "unstable") {
+		logger.info(`PR #${pr.number} mergeability blocked: ${pr.mergeable_state}`)
+		throw new NoError()
 	}
 	if (!pr.labels.map(l => l.name).includes("Automerge")) {
 		logger.info(`PR #${pr.number} has no Automerge label`)
