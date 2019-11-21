@@ -531,18 +531,22 @@ async function automerge(context: AuthenticatedContext, pr: PullRequestExtended)
 			// abort
 			return
 		}
-		// Merge into release first...
-		const mergeOK = await tryMerge(context, pr, mergeMethod, title)
-		if (!mergeOK) {
-			throw "Merge failed"
-		}
 		// Merge and push to master
 		const repoDir = env("GITHUB_WORKSPACE")
 		const mergeMsg = await git.merge(repoDir, "master", pr.head.ref)
 		if (mergeMsg !== null) {
-			logger.error(`Automerge from release to master failure: ${mergeMsg}`)
+			logger.error(
+				`FAILED merging (${mergeMethod}) ${pr.head.ref} -> ${pr.base.ref} -> master trying to merge into master`
+			)
+			throw "Merge to master failed"
 		}
 		await git.push(repoDir, false, "master")
+
+		// Merge the PR after...
+		const mergeOK = await tryMerge(context, pr, mergeMethod, title)
+		if (!mergeOK) {
+			throw "Merge failed"
+		}
 		return
 	}
 	// Is a feature branch into master -- merge
