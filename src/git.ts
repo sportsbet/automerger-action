@@ -147,7 +147,11 @@ export async function removeGitHubConfigs(dir: string): Promise<string> {
  * @param mergingBranch Branch that's being merged
  */
 export async function canMergeCleanly(dir: string, base: string, mergingBranch: string): Promise<string | null> {
-	await git(dir, "checkout", base)
+	try {
+		await git(dir, "checkout", base)
+	} catch (err) {
+		await git(dir, "checkout", "-b", base, `origin/${base}`)
+	}
 	await git(dir, "pull", "--quiet", "--no-commit")
 	await git(dir, "fetch", "--quiet", "origin", `${mergingBranch}:refs/remotes/origin/${mergingBranch}`)
 	try {
@@ -178,7 +182,11 @@ export async function merge(
 	mergingBranch: string,
 	message?: string
 ): Promise<string | null> {
-	await git(dir, "checkout", base)
+	try {
+		await git(dir, "checkout", base)
+	} catch (err) {
+		await git(dir, "checkout", "-b", base, `origin/${base}`)
+	}
 	await git(dir, "pull", "--quiet", "--no-commit")
 	await git(dir, "fetch", "--quiet", "origin", `${mergingBranch}:refs/remotes/origin/${mergingBranch}`)
 	try {
