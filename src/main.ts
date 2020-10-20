@@ -143,7 +143,7 @@ interface PullRequestExtended extends PullRequestCommon {
 }
 
 async function delay<T>(timeout: number, value?: T): Promise<T> {
-	return new Promise(res => setTimeout(() => res(value), timeout))
+	return new Promise((res) => setTimeout(() => res(value), timeout))
 }
 
 async function retry(
@@ -385,7 +385,7 @@ async function processPR(context: AuthenticatedContext, pr: PullRequestExtended)
 		logger.info(`PR #${pr.number} mergeability blocked: ${pr.mergeable_state}`)
 		throw new NoError()
 	}
-	if (!pr.labels.map(l => l.name).includes("Automerge")) {
+	if (!pr.labels.map((l) => l.name).includes("Automerge")) {
 		logger.info(`PR #${pr.number} has no Automerge label`)
 		throw new NoError()
 	}
@@ -489,7 +489,7 @@ async function checkRollupToMaster(context: AuthenticatedContext, pr: PullReques
 		owner: pr.base.repo.owner.login,
 		repo: pr.base.repo.name
 	})
-	const myStatuses = existingStatuses.data.filter(s => s.context === statusContext)
+	const myStatuses = existingStatuses.data.filter((s) => s.context === statusContext)
 	let needsComment = true
 	if (myStatuses.length > 1) {
 		if (myStatuses[0].state === "failure" || myStatuses[0].state === "error") {
@@ -505,13 +505,17 @@ async function checkRollupToMaster(context: AuthenticatedContext, pr: PullReques
 			"\n```\n\n" +
 			"The best way to fix this is to make a separate PR into `master` like this:\n\n```\n" +
 			`git checkout master && git pull && git checkout -b feature/fix-pr-${pr.number}\n` +
-			`git fetch origin && git merge origin/${pr.head.ref}` +
+			`git fetch origin && git merge origin/${pr.base.ref}` +
 			"\n```\n\n" +
-			"Then fix the merge conflicts, then...\n\n```\n" +
+			"Fix any merge conflicts that appear (if any), then...\n\n```\n" +
+			`git merge origin/${pr.head.ref}` +
+			"\n```\n\n" +
+			"Fix any other merge conflicts that appear (if any), then...\n\n```\n" +
 			`git push -u origin feature/fix-pr-${pr.number}` +
 			"\n```\n\n" +
-			"...and then make a PR into `master` in GitHub. If you want me to stop spamming this " +
-			"message, remove the Automerge label."
+			"...and then make a PR into `master` in GitHub. This new PR must be merged using " +
+			'Automerger, otherwise use "Merge pull request" and NOT "Squash and merge".  ' +
+			"If you want me to stop spamming this message, remove the Automerge label."
 		if (needsComment) {
 			await addCommentToPR(context, pr, desc)
 		}
@@ -533,7 +537,7 @@ async function checkRollupToMaster(context: AuthenticatedContext, pr: PullReques
 async function automerge(context: AuthenticatedContext, pr: PullRequestExtended): Promise<void> {
 	let mergeMethod: MergeMethod = "merge"
 	let title: string | undefined = undefined
-	if (pr.base.ref === "master") {
+	if (pr.base.ref === "master" && !pr.head.ref.startsWith("feature/fix-pr-")) {
 		mergeMethod = "squash"
 		title = `${pr.title} (#${pr.number})`
 	}
