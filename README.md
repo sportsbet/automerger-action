@@ -20,11 +20,11 @@ will automatically merge the PR with the correct merge strategy.
 Merge strategy determined like this:
 
 -   PR from `*` to `master`: Squash
--   PR from `*` to `release-web` or `release-ios` or `releases/*`: Merge
+-   PR from `*` to `release-web` or `release-ios` or `release` or `releases/*`: Merge
 -   Otherwise: Merge
 
 Note that the bot has special behaviour when raising a PR into `release-web`,
-`release-ios`, and `releases/*`. Any PRs into these branches, when merged,
+`release-ios`, `release`, and `releases/*`. Any PRs into these branches, when merged,
 will also _automatically_ be merged into `master`. If the branch specified
 in the PR cannot be cleanly merged into `master`, it will put a failed status
 check on your PR, preventing its merge, until it can be cleanly merged into

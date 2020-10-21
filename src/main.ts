@@ -373,7 +373,12 @@ async function onPush(context: Context, payload: WebhooksAPI.WebhookPayloadPush)
 }
 
 function isMergingIntoRelease(pr: PullRequestCommon): boolean {
-	if (pr.base.ref === "release-ios" || pr.base.ref === "release-web" || pr.base.ref.startsWith("releases/")) {
+	if (
+		pr.base.ref === "release-ios" ||
+		pr.base.ref === "release-web" ||
+		pr.base.ref === "release" ||
+		pr.base.ref.startsWith("releases/")
+	) {
 		return true
 	}
 	return false
